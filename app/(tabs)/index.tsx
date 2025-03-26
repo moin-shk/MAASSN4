@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { View, Text, TextInput, Button, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native'
 import { supabase } from '../../supabaseClient'
 import { User } from '@supabase/supabase-js'
 
@@ -13,33 +13,59 @@ export default function App() {
   const [userDetails, setUserDetails] = useState<{ first_name: string; last_name: string; email: string } | null>(null)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         setUser(session.user)
         setScreen('landing')
       } else {
         setScreen('signin')
       }
-    })
+    }
+    getSession()
   }, [])
 
+  // Sign Up: Create an account but do NOT insert extra details yet.
+  async function signUp() {
+    const { data, error } = await supabase.auth.signUp({ email, password })
+    if (!error && data.user) {
+      alert('Sign-up successful! Please sign in.')
+      setScreen('signin')
+    } else {
+      alert('Error during sign-up: ' + error?.message)
+    }
+  }
+
+  // Sign In: Authenticate and then check if the user details record exists.
   async function signIn() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (!error && data.user) {
       setUser(data.user)
-      setScreen('landing')
-    }
-  }
-
-  async function signUp() {
-    const { data, error } = await supabase.auth.signUp({ email, password })
-    if (!error && data.user) {
-      const { error: insertError } = await supabase
-        .from('user_details')
-        .insert([{ uuid: data.user.id, first_name: firstName, last_name: lastName, email }])
-      if (!insertError) {
-        setScreen('signin')
+      // Check if user details record exists
+      const { data: userRecord } = await supabase
+        .from("User")
+        .select("*")
+        .eq("uuid", data.user.id)
+        .maybeSingle()
+      if (!userRecord) {
+        // If the record is missing, attempt to insert it using available details.
+        // If firstName/lastName are missing, you could prompt the user or handle it as needed.
+        if (!firstName || !lastName) {
+          alert("Profile details missing. Please complete your profile.")
+          // Optionally navigate to a 'Complete Profile' screen.
+          return
+        }
+        const { error: insertError } = await supabase
+          .from("User")
+          .insert([{ uuid: data.user.id, first_name: firstName, last_name: lastName, email }])
+        if (insertError) {
+          alert("Error inserting user details: " + insertError.message)
+          return
+        }
       }
+      setScreen('landing')
+    } else {
+      alert('Incorrect credentials. Please try again.')
     }
   }
 
@@ -57,7 +83,7 @@ export default function App() {
   async function fetchUserDetails() {
     if (user) {
       const { data, error } = await supabase
-        .from('user_details')
+        .from("User")
         .select('*')
         .eq('uuid', user.id)
         .single()
@@ -85,29 +111,14 @@ export default function App() {
     return (
       <View style={styles.container}>
         <Text style={styles.heading}>Sign In</Text>
-        <TextInput
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          style={styles.input}
-        />
-        <View style={styles.buttonSpacing}>
-          <TouchableOpacity style={styles.button} onPress={signIn}>
-            <Text style={styles.buttonText}>Sign In</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.buttonSpacing}>
-          <TouchableOpacity style={styles.linkButton} onPress={() => setScreen('signup')}>
-            <Text style={styles.linkButtonText}>Go to Sign Up</Text>
-          </TouchableOpacity>
-        </View>
+        <TextInput placeholder="Email" value={email} onChangeText={setEmail} style={styles.input} />
+        <TextInput placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry style={styles.input} />
+        <TouchableOpacity style={styles.button} onPress={signIn}>
+          <Text style={styles.buttonText}>Sign In</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.linkButton} onPress={() => setScreen('signup')}>
+          <Text style={styles.linkButtonText}>Go to Sign Up</Text>
+        </TouchableOpacity>
       </View>
     )
   }
@@ -116,41 +127,16 @@ export default function App() {
     return (
       <View style={styles.container}>
         <Text style={styles.heading}>Sign Up</Text>
-        <TextInput
-          placeholder="First Name"
-          value={firstName}
-          onChangeText={setFirstName}
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Last Name"
-          value={lastName}
-          onChangeText={setLastName}
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          style={styles.input}
-        />
-        <View style={styles.buttonSpacing}>
-          <TouchableOpacity style={styles.button} onPress={signUp}>
-            <Text style={styles.buttonText}>Sign Up</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.buttonSpacing}>
-          <TouchableOpacity style={styles.linkButton} onPress={() => setScreen('signin')}>
-            <Text style={styles.linkButtonText}>Go to Sign In</Text>
-          </TouchableOpacity>
-        </View>
+        <TextInput placeholder="First Name" value={firstName} onChangeText={setFirstName} style={styles.input} />
+        <TextInput placeholder="Last Name" value={lastName} onChangeText={setLastName} style={styles.input} />
+        <TextInput placeholder="Email" value={email} onChangeText={setEmail} style={styles.input} />
+        <TextInput placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry style={styles.input} />
+        <TouchableOpacity style={styles.button} onPress={signUp}>
+          <Text style={styles.buttonText}>Sign Up</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.linkButton} onPress={() => setScreen('signin')}>
+          <Text style={styles.linkButtonText}>Go to Sign In</Text>
+        </TouchableOpacity>
       </View>
     )
   }
@@ -164,11 +150,9 @@ export default function App() {
         ) : (
           <Text style={styles.loadingText}>Loading user details...</Text>
         )}
-        <View style={styles.buttonSpacing}>
-          <TouchableOpacity style={styles.button} onPress={signOut}>
-            <Text style={styles.buttonText}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.button} onPress={signOut}>
+          <Text style={styles.buttonText}>Sign Out</Text>
+        </TouchableOpacity>
       </View>
     )
   }
@@ -198,15 +182,12 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 10,
   },
-  buttonSpacing: {
-    marginVertical: 5,
-    marginTop: 10,
-  },
   button: {
     backgroundColor: '#4CAF50',
     paddingVertical: 12,
     borderRadius: 5,
     alignItems: 'center',
+    marginVertical: 10,
   },
   buttonText: {
     color: 'white',
